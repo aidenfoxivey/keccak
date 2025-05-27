@@ -1,18 +1,14 @@
 import cocotb
-from cocotb.triggers import Timer, RisingEdge
+from cocotb.triggers import RisingEdge
 from cocotb.clock import Clock
 from cocotb.binary import BinaryValue
 from cocotb.result import TestFailure
 from CompactFIPS202 import KeccakF1600
-import sys
 
-# Add path to your VHDL library package (if not already in PYTHONPATH)
-# sys.path.append('/path/to/your/vhdl/packages') # Uncomment and modify if needed
 
-# Define the state dimensions based on your VHDL
 NUM_PLANES = 5
 NUM_SHEETS = 5
-LANE_WIDTH = 64  # bits
+LANE_WIDTH = 64
 
 
 async def reset_dut(dut):
@@ -23,27 +19,6 @@ async def reset_dut(dut):
     dut.rst_n.value = 1
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
-
-
-def convert_dut_state_to_bytes(dut_state_obj):
-    """
-    Converts the DUT's 5x5x64-bit state (cocotb.handle.HierarchyObject)
-    into a flat list of 200 bytes for the KeccakF1600 reference.
-    The order for KeccakF1600 is (x,y) where x is the plane and y is the sheet.
-    Each 64-bit lane is read as 8 bytes, LSB first.
-    """
-    byte_array = [0] * 200
-    for y in range(NUM_SHEETS):
-        for x in range(NUM_PLANES):
-            # Read the 64-bit lane value from the DUT
-            lane_val = dut_state_obj[x][y].value.integer
-
-            # Convert 64-bit integer to 8 bytes, LSB first (little-endian for Keccak)
-            for byte_idx in range(8):
-                byte_array[(x + y * NUM_PLANES) * 8 + byte_idx] = (
-                    lane_val >> (byte_idx * 8)
-                ) & 0xFF
-    return byte_array
 
 
 def convert_bytes_to_dut_state_format(byte_array):
@@ -73,7 +48,7 @@ async def test_keccak_reset(dut):
     dut._log.info("Reset test passed")
 
 
-RC = {  # Round constants for KeccakF1600{
+RC = {
     0: 0x0000000000000001,
     1: 0x0000000000008082,
     2: 0x800000000000808A,
