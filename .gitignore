@@ -1,0 +1,7 @@
+results.xml
+*.vcd
+sim_build
+.venv
+__pycache__
+.gtkwaverc
+work/
