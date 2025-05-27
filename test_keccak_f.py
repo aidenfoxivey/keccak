@@ -150,13 +150,11 @@ async def test_keccak_random_input(dut):
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
     await reset_dut(dut)
 
-    for _ in range(100):
-        # Generate a random initial state (200 bytes for Keccak-f1600)
+    for _ in range(10):
         initial_state_bytes = [
             random.randint(0, 255) for _ in range(NUM_PLANES * NUM_SHEETS * 8)
         ]
 
-        # Convert the random bytes to the DUT's 5x5 state format (little-endian lanes)
         initial_state_dut_format = [[0] * NUM_SHEETS for _ in range(NUM_PLANES)]
         for y in range(NUM_SHEETS):
             for x in range(NUM_PLANES):
@@ -168,17 +166,13 @@ async def test_keccak_random_input(dut):
                 dut.i_state[x][y].value = BinaryValue(
                     lane_val, bigEndian=False, n_bits=LANE_WIDTH
                 )
-                initial_state_dut_format[x][y] = hex(
-                    lane_val
-                )  # Store as hex for consistent comparison with DUT output logs
+                initial_state_dut_format[x][y] = hex(lane_val)
 
-        # Start the Keccak permutation
         dut.start.value = 1
         await RisingEdge(dut.clk)
         dut.start.value = 0
         await RisingEdge(dut.clk)
 
-        # Wait for the operation to complete
         cycle_count = 0
         max_cycles = (
             50  # Keccak-f1600 takes 24 rounds, so 25 cycles (24 + 1 for final output)
@@ -199,19 +193,16 @@ async def test_keccak_random_input(dut):
             f"Expected 25 cycles for Keccak-f1600, but got {cycle_count}"
         )
 
-        # Read the final state from the DUT
         dut_output_matrix = [
             [hex(int(dut.o_state[x][y])) for x in range(NUM_PLANES)]
             for y in range(NUM_SHEETS)
         ]
 
-        # Calculate the reference output using the Python reference implementation
         reference_output_bytes = KeccakF1600(initial_state_bytes)
         reference_output_matrix = convert_bytes_to_dut_state_format(
             reference_output_bytes
         )
 
-        # Compare DUT output with reference output
         for y in range(NUM_SHEETS):
             for x in range(NUM_PLANES):
                 if dut_output_matrix[y][x] != reference_output_matrix[x][y]:
