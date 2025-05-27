@@ -82,6 +82,6 @@ begin
   end process;
 
   ready <= not busy;
-  o_state <= result_state;
+  o_state <= current_state;
 
 end rtl;

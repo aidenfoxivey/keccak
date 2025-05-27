@@ -64,19 +64,16 @@ def convert_bytes_to_dut_state_format(byte_array):
     return state_matrix
 
 
-# --- Tests ---
+@cocotb.test()
+async def test_keccak_reset(dut):
+    """Test reset functionality."""
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    await reset_dut(dut)
+    assert dut.ready.value == 1, "Ready should be high after reset"
+    dut._log.info("Reset test passed")
 
 
-# @cocotb.test()
-# async def test_keccak_reset(dut):
-#     """Test reset functionality."""
-#     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
-#     await reset_dut(dut)
-#     assert dut.ready.value == 1, "Ready should be high after reset"
-#     dut._log.info("Reset test passed")
-
-
-RC = {
+RC = {  # Round constants for KeccakF1600{
     0: 0x0000000000000001,
     1: 0x0000000000008082,
     2: 0x800000000000808A,
@@ -96,7 +93,7 @@ RC = {
     16: 0x8000000000008002,
     17: 0x8000000000000080,
     18: 0x000000000000800A,
-    19: 0x800000008000800A,
+    19: 0x800000008000000A,
     20: 0x8000000080008081,
     21: 0x8000000000008080,
     22: 0x0000000080000001,
@@ -104,21 +101,21 @@ RC = {
 }
 
 
-# @cocotb.test()
-# async def verify_round_constants(dut):
-#     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
-#     await reset_dut(dut)
+@cocotb.test()
+async def verify_round_constants(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    await reset_dut(dut)
 
-#     dut.start.value = 1
-#     await RisingEdge(dut.clk)
-#     dut.start.value = 0
-#     await RisingEdge(dut.clk)
+    dut.start.value = 1
+    await RisingEdge(dut.clk)
+    dut.start.value = 0
+    await RisingEdge(dut.clk)
 
-#     for i in range(24):
-#         assert dut.rc.value == BinaryValue(RC[i], n_bits=64, bigEndian=False), (
-#             f"Round constant mismatch at round {i}: expected {RC[i]}, got {dut.rc.value}"
-#         )
-#         await RisingEdge(dut.clk)
+    for i in range(24):
+        assert dut.rc.value == BinaryValue(RC[i], n_bits=64, bigEndian=False), (
+            f"Round constant mismatch at round {i}: expected {RC[i]}, got {dut.rc.value}"
+        )
+        await RisingEdge(dut.clk)
 
 
 @cocotb.test()
@@ -141,7 +138,6 @@ async def test_keccak_zero_input(dut):
     dut.start.value = 0
     await RisingEdge(dut.clk)
 
-    # Wait for completion
     cycle_count = 0
     max_cycles = 50
     while dut.ready.value == 0 and cycle_count < max_cycles:
@@ -154,30 +150,19 @@ async def test_keccak_zero_input(dut):
         )
 
     assert dut.ready.value == 1, "Operation should complete and ready should be high"
-    dut._log.info(f"Keccak-f completed in {cycle_count} cycles.")
+
+    assert cycle_count == 25  # 24 + 1 for the final state
 
     s = [
         [hex(int(dut.o_state[x][y])) for x in range(NUM_PLANES)]
         for y in range(NUM_SHEETS)
     ]
 
-    print(s)
-    # reference_output_bytes = KeccakF1600(initial_state_bytes)
-    # reference_output_matrix = convert_bytes_to_dut_state_format(reference_output_bytes)
+    initial_state_bytes = [0 for _ in range(NUM_PLANES * NUM_SHEETS * 8)]
 
-    # assert s == reference_output_matrix, (
-    #     "Keccak-f random input test failed. Output does not match reference."
-    # )
+    reference_output_bytes = KeccakF1600(initial_state_bytes)
+    reference_output_matrix = convert_bytes_to_dut_state_format(reference_output_bytes)
 
-
-# Helper to convert a python matrix of integers to bytes (for the random test)
-def convert_dut_state_to_bytes_from_matrix(state_matrix):
-    byte_array = [0] * 200
-    for y in range(NUM_SHEETS):
-        for x in range(NUM_PLANES):
-            lane_val = state_matrix[x][y]
-            for byte_idx in range(8):
-                byte_array[(x + y * NUM_PLANES) * 8 + byte_idx] = (
-                    lane_val >> (byte_idx * 8)
-                ) & 0xFF
-    return byte_array
+    for x in range(NUM_PLANES):
+        for y in range(NUM_SHEETS):
+            assert s[y][x] == reference_output_matrix[x][y]
